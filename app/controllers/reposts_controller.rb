@@ -56,7 +56,7 @@ class RepostsController < ApplicationController
         @votes_by_group.push([row['image_id'], row['count'], row['votes'],
           row['upvotes'], row['downvotes']
         ])
-        
+
         sum_data_by_count_info(count, total_votes, upvotes, downvotes)
 
 
@@ -80,7 +80,7 @@ class RepostsController < ApplicationController
       # for each image_id in real time data, add to votes_by_group
       # if no historical data
       image_ids.each do |post|
-        if posts[post.to_s] != -1
+        if posts[post] != -1
           post_info = posts[post]
 
           @votes_by_group.push([post, post_info[3], post_info[0],
@@ -88,7 +88,9 @@ class RepostsController < ApplicationController
           ])
 
           sum_data_by_count_info(post, post_info[0],
-            post_info[1], post_info[2])          
+            post_info[1], post_info[2]) 
+
+          posts[post] = -1           
         end
       end
     end

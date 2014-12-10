@@ -26,7 +26,7 @@
         <td><%= @data_by_counts[index][0].to_s  %></td>
         <td><%= @data_by_counts[index][1].to_s %></td>
         <td><%= @data_by_counts[index][2].to_s %></td>
-        <td><%= (@data_by_counts[index][0].to_f/index).to_s %></td>
+        <td><%= (@data_by_counts[index][0].to_f/index).round(2).to_s %></td>
         <td><%= ((@data_by_counts[index][1].to_f/@data_by_counts[index][0].to_f)*100.0).round(2).to_s + "%" %></td>
 
       </tr>
