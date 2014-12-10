@@ -83,11 +83,13 @@ class RepostsController < ApplicationController
         if posts[post] != -1
           post_info = posts[post]
 
+          [total_votes, upvotes, downvotes, 1]
+
           @votes_by_group.push([post, post_info[3], post_info[0],
-            post_info[1], post_info[2], "in image_ids loop"
+            post_info[1], post_info[2]
           ])
 
-          sum_data_by_count_info(post, post_info[0],
+          sum_data_by_count_info(post_info[3], post_info[0],
             post_info[1], post_info[2]) 
 
           posts[post] = -1           
