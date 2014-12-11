@@ -15,90 +15,12 @@ class RepostsController < ApplicationController
     @latest_posts = []
     @data_by_counts = Hash.new([0,0,0])
     @counts = []
+    @posts = Hash.new(-1)
+    @image_ids = []
 
-    posts = Hash.new(-1)
-    image_ids = []
-
-    # get realtime post data
-    @session.execute("SELECT * FROM latest_posts").each do |row|
-      image_id = row['image_id']
-      total_votes = row['total_votes']
-      upvotes = row['upvotes']
-      downvotes = row['downvotes']
-
-      # put post info in hash table
-      if posts[image_id] == -1
-        posts[image_id] = [total_votes, upvotes, downvotes, 1]
-
-        image_ids.push(image_id)  
-
-
-      # if already in hash table, sum post info    
-      else
-        post_info = posts[image_id]
-
-        total_votes = total_votes + post_info[0]
-        upvotes = upvotes + post_info[1]
-        downvotes = downvotes + post_info[2]
-        count = post_info[3] + 1
-
-        posts[image_id] = [total_votes, upvotes, downvotes, count]
-      end
-    end    
-
+    get_realtime_post_data
+    get_historical_post_data
     # get historial post data
-    @session.execute("SELECT * FROM votes_by_group_id").each do |row|
-      image_id = row['image_id']
-      count = row['count']
-      total_votes = row['votes']
-      upvotes = row['upvotes']
-      downvotes = row['downvotes']
-
-      # if no realtime post with image id
-      if posts[image_id] == -1
-        @votes_by_group.push([row['image_id'], row['count'], row['votes'],
-          row['upvotes'], row['downvotes']
-        ])
-
-        sum_data_by_count_info(count, total_votes, upvotes, downvotes)
-
-
-      # otherwise, sum historical/realtime info for image id
-      else
-        post_info = posts[image_id]
-        total_votes = total_votes + post_info[0]
-        upvotes = upvotes + post_info[1]
-        downvotes = downvotes + post_info[2]
-        count = count + post_info[3]
-
-        votes_by_group_info = [image_id, count, total_votes,
-          upvotes, downvotes]
-
-        @votes_by_group.push(votes_by_group_info)
-
-        sum_data_by_count_info(count, total_votes, upvotes, downvotes)
-
-        posts[image_id] = -1
-      end
-      # for each image_id in real time data, add to votes_by_group
-      # if no historical data
-      image_ids.each do |post|
-        if posts[post] != -1
-          post_info = posts[post]
-
-          [total_votes, upvotes, downvotes, 1]
-
-          @votes_by_group.push([post, post_info[3], post_info[0],
-            post_info[1], post_info[2]
-          ])
-
-          sum_data_by_count_info(post_info[3], post_info[0],
-            post_info[1], post_info[2]) 
-
-          posts[post] = -1           
-        end
-      end
-    end
 
     @session.close
 
@@ -113,7 +35,206 @@ class RepostsController < ApplicationController
 
     @data_by_counts[count.to_i] = [votes, upvotes, downvotes]
     @counts[count] = true
+  end
 
+  def get_historical_post_data
+    @not_found = []
+
+    @session.execute("SELECT * FROM votes_by_group_id").each do |row|
+      image_id = row['image_id']
+      count = row['count']
+      total_votes = row['votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']
+
+      # if no realtime post with image id
+      if @posts[image_id.to_s] != -1  
+        @found = "true"
+        post_info = @posts[image_id.to_s]
+        total_votes = total_votes + post_info[0]
+        upvotes = upvotes + post_info[1]
+        downvotes = downvotes + post_info[2]
+        count = count + post_info[3]
+
+        votes_by_group_info = [image_id, count, total_votes,
+          upvotes, downvotes]
+
+        @votes_by_group.push(votes_by_group_info)
+
+        sum_data_by_count_info(count, total_votes, upvotes, downvotes)
+
+        @posts[image_id.to_s] = -1
+      else
+        @votes_by_group.push([row['image_id'], row['count'], row['votes'],
+          row['upvotes'], row['downvotes']
+        ])
+
+        @not_found.push(image_id)
+        sum_data_by_count_info(count, total_votes, upvotes, downvotes)
+      end
+
+      # if no historical data
+      @image_ids.each do |post|
+        if @posts[post] != -1
+          post_info = @posts[post]
+
+          [total_votes, upvotes, downvotes, 1]
+
+          @votes_by_group.push([post, post_info[3], post_info[0],
+            post_info[1], post_info[2]
+          ])
+
+          sum_data_by_count_info(post_info[3], post_info[0],
+            post_info[1], post_info[2]) 
+
+          @posts[post] = -1           
+        end
+      end
+    end
+  end
+
+  def get_realtime_post_data
+    @session.execute("SELECT * FROM latest_posts").each do |row|
+      image_id = row['image_id']
+      total_votes = row['total_votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']
+
+      # put post info in hash table
+      if @posts[image_id.to_s] == -1
+        @posts[image_id.to_s] = [total_votes, upvotes, downvotes, 1]
+
+        @image_ids.push(image_id)  
+      # if already in hash table, sum post info    
+      else
+        post_info = @posts[image_id.to_s]
+
+        total_votes = total_votes + post_info[0]
+        upvotes = upvotes + post_info[1]
+        downvotes = downvotes + post_info[2]
+        count = post_info[3] + 1
+
+        @posts[image_id.to_s] = [total_votes, upvotes, downvotes, count]
+      end
+    end  
+
+    @test_posts = @posts.clone
+  end   
+
+  def votes_by_subreddit
+    connect_to_cluster
+
+    @votes_by_group = []
+    @latest_posts = []
+    @data_by_counts = Hash.new([0,0,0,0])
+    @counts = []
+    @posts = Hash.new(-1)
+    @subreddits = []
+
+    get_realtime_subreddit_data
+    get_historical_subreddit_data
+    # get_realtime_post_data
+    # get_historical_post_data
+    # # get historial post data
+
+    @session.close
+  end
+
+  def get_realtime_subreddit_data
+    @session.execute("SELECT * FROM latest_posts").each do |row|
+      subreddit = row['subreddit']
+      total_votes = row['total_votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']
+
+      # put post info in hash table
+      if @posts[subreddit.to_s] == -1
+        @posts[subreddit.to_s] = [total_votes, upvotes, downvotes, 1]
+
+        @subreddits.push(subreddit)  
+      # if already in hash table, sum post info    
+      else
+        post_info = @posts[subreddit.to_s]
+
+        total_votes = total_votes + post_info[0]
+        upvotes = upvotes + post_info[1]
+        downvotes = downvotes + post_info[2]
+        count = post_info[3] + 1
+
+        @posts[subreddit.to_s] = [total_votes, upvotes, downvotes, count]
+      end
+    end  
+
+    @test_posts = @posts.clone
+  end
+
+  def sum_data_by_subreddit(subreddit, count, t_votes, u_votes, d_votes)
+    count_info = @data_by_counts[subreddit.to_s]
+
+    count = count_info[0] + count
+    votes = count_info[1] + t_votes
+    upvotes = count_info[2] + u_votes
+    downvotes = count_info[3] + d_votes
+
+    @data_by_counts[subreddit.to_s] = [count, votes, upvotes, downvotes]
+    # @counts[subreddit] = true
+  end
+
+  def get_historical_subreddit_data
+    @not_found = []
+    @found = []
+
+    @session.execute("SELECT * FROM votes_by_subreddit").each do |row|
+      subreddit = row['subreddit']
+      count = row['count']
+      total_votes = row['votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']
+
+      # if no realtime post with image id
+      if @posts[subreddit.to_s] != -1  
+        @found.push(subreddit)
+        post_info = @posts[subreddit.to_s]
+        total_votes = total_votes + post_info[0]
+        upvotes = upvotes + post_info[1]
+        downvotes = downvotes + post_info[2]
+        count = count + post_info[3]
+
+        votes_by_group_info = [subreddit, count, total_votes,
+          upvotes, downvotes]
+
+        @votes_by_group.push(votes_by_group_info)
+
+        sum_data_by_subreddit(subreddit.to_s, count, total_votes, upvotes, downvotes)
+
+        @posts[subreddit.to_s] = -1
+      else
+        @votes_by_group.push([row['subreddit'], row['count'], row['votes'],
+          row['upvotes'], row['downvotes']
+        ])
+
+        @not_found.push(subreddit)
+        sum_data_by_subreddit(subreddit, count, total_votes, upvotes, downvotes)
+      end
+
+      # if no historical data
+      @subreddits.each do |post|
+        if @posts[post.to_s] != -1
+          post_info = @posts[post.to_s]
+
+          [total_votes, upvotes, downvotes, 1]
+
+          @votes_by_group.push([post, post_info[3], post_info[0],
+            post_info[1], post_info[2]
+          ])
+
+          sum_data_by_subreddit(post, post_info[3], post_info[0],
+            post_info[1], post_info[2]) 
+
+          @posts[post] = -1           
+        end
+      end
+    end
   end
 
   def votes_by_repost_num
@@ -193,7 +314,7 @@ class RepostsController < ApplicationController
   def consolidate_realtime_votes(posts, unixtime, total_votes, upvotes, downvotes)
     index = 0
 
-    while (posts[index][0] < unixtime) & (index < posts.size)
+    while (posts[index][0] < unixtime) & (index < posts.size-1)
       index = index + 1
     end
     temp = [unixtime, total_votes, upvotes, downvotes]
@@ -248,8 +369,9 @@ class RepostsController < ApplicationController
 
   def get_vote_data_for_image_id(image_id)
     posts = []
+    image = image_id.to_i
 
-    @session.execute("SELECT * FROM votes_by_repost_num_raw WHERE image_id = #{image_id} ALLOW FILTERING").each do |row|
+    @session.execute("SELECT * FROM votes_by_repost_num_raw WHERE image_id = #{image} ALLOW FILTERING").each do |row|
 
       raw_count = row['count']
       raw_votes = row['votes']
@@ -273,11 +395,13 @@ class RepostsController < ApplicationController
       downvotes = row['downvotes']
 
       repost_nums[count] = [total_votes, upvotes, downvotes]
-
     end    
 
     @test_h = repost_nums.clone
     return repost_nums    
+  end
+
+  def get_votes_stats_by_subreddit
 
   end
 

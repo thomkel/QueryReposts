@@ -14,7 +14,8 @@
       <th>Upvotes</th>
       <th>Downvotes</th>
       <th>Avg. # Votes</th>      
-      <th>Upvote Percentage</th>            
+      <th>Upvote Percentage</th>
+      <th>Average Score</th>               
     </tr>
   </thead>
 
@@ -27,44 +28,17 @@
         <td><%= @data_by_counts[index][1].to_s %></td>
         <td><%= @data_by_counts[index][2].to_s %></td>
         <td><%= (@data_by_counts[index][0].to_f/index).round(2).to_s %></td>
-        <td><%= ((@data_by_counts[index][1].to_f/@data_by_counts[index][0].to_f)*100.0).round(2).to_s + "%" %></td>
-
+        <% average_votes = ((@data_by_counts[index][1].to_f/@data_by_counts[index][0].to_f)*100.0).round(2) %>
+        <td><%= average_votes.to_s + "%" %></td>
+        <td><%= ((@data_by_counts[index][1] - @data_by_counts[index][2].to_f) /
+              index.to_f).round(2) %></td>        
       </tr>
       <% end %>
     <% end %>
   </tbody>
 </table>
 
-<h2>Raw Data by Image Id</h2>
 
-<table>
-  <col width="130">
-  <col width="130"> 
-  <col width="130">
-  <col width="130">  
-  <col width="130">    
-  <thead>
-    <tr>
-      <th>Image Id</th>
-      <th>Times Reposted</th>
-      <th>Total Votes</th>      
-      <th>Upvotes</th>
-      <th>Downvotes</th>
-    </tr>
-  </thead>
-
-  <tbody>
-    <% @votes_by_group.each do |group| %>
-      <tr>
-        <td><%= group[0].to_s %></td>
-        <td><%= group[1].to_s  %></td>
-        <td><%= group[2].to_s %></td>
-        <td><%= group[3].to_s %></td>
-        <td><%= group[4].to_s %></td>        
-      </tr>
-    <% end %>
-  </tbody>
-</table>
 
 
 
