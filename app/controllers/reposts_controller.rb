@@ -1,11 +1,14 @@
 require 'cassandra'
 
 class RepostsController < ApplicationController
-  # before_action :set_repost, only: [:show, :edit, :update, :destroy]
+
+  def index
+    render 'welcome'
+  end
 
   # GET /reposts
   # GET /reposts.json
-  def index
+  def votes_by_times_reposted
     connect_to_cluster
 
     @votes_by_group = []
@@ -98,6 +101,7 @@ class RepostsController < ApplicationController
     end
 
     @session.close
+
   end
 
   def sum_data_by_count_info(count, t_votes, u_votes, d_votes)
@@ -112,20 +116,174 @@ class RepostsController < ApplicationController
 
   end
 
+  def votes_by_repost_num
+    connect_to_cluster
+
+    @realtime_reposts = Hash.new(-1)
+    @realtime_image_ids = []
+
+    @session.execute("SELECT * FROM latest_posts").each do |row|
+      image_id = row['image_id']
+      total_votes = row['total_votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']    
+      unixtime = row['unixtime']
+
+      if @realtime_reposts[image_id] == -1
+        @realtime_image_ids.push(image_id)  
+        @realtime_reposts[image_id] = [[unixtime, total_votes, upvotes, downvotes]] 
+      else
+        @realtime_reposts[image_id] = consolidate_realtime_votes(@realtime_reposts[image_id], unixtime, total_votes, upvotes, downvotes)
+      end
+    end
+
+    @realtime_image_ids.each do |image_id|
+      @raw_posts = get_vote_data_for_image_id(image_id)
+
+      if @raw_posts.size > 0 
+        @rt_posts_test = @realtime_reposts[image_id]
+
+        @realtime_reposts[image_id] = consolidate_realtime_and_raw_votes(@raw_posts, @realtime_reposts[image_id])
+      end
+    end
+
+    @reposts_hash = consolidate_historical_and_realtime_votes(get_posts_by_reposts_num, @realtime_reposts, @realtime_image_ids)  
+    @repost_nums = transfer_repost_data_to_array(@reposts_hash)
+
+    @session.close
+  end
+
+  def consolidate_realtime_and_raw_votes(raw_posts, realtime_posts)
+    # raw data= [[raw_unixtime, raw_votes, raw_upvotes, raw_downvotes]]
+    # realtime = [[unixtime, total_votes, upvotes, downvotes]] 
+    @copy_raw_posts = Array.new(raw_posts)
+
+    size = realtime_posts.size
+
+    for i in 0..size-1
+      @copy_raw_posts[raw_posts.size + i] = [Float::INFINITY, 0, 0, 0]
+    end
+
+    @index = 0
+
+    realtime_posts.each do |rt_post|
+      while (@index < @copy_raw_posts.size-1)
+        if (@copy_raw_posts[@index][0] < rt_post[0])
+          @index = @index + 1
+        else
+          break
+        end
+      end
+
+      temp = [rt_post[0], rt_post[1], rt_post[2], rt_post[3]]
+
+      for i in @index..@copy_raw_posts.size-1
+        @p_index = @copy_raw_posts[i]
+
+        new_array = [temp[0], temp[1]-@p_index[1], temp[2]-@p_index[2], temp[3]-@p_index[3]]
+        @copy_raw_posts[i] = new_array
+
+        temp = @p_index
+      end
+    end
+
+    return @copy_raw_posts
+  end  
+
+  def consolidate_realtime_votes(posts, unixtime, total_votes, upvotes, downvotes)
+    index = 0
+
+    while (posts[index][0] < unixtime) & (index < posts.size)
+      index = index + 1
+    end
+    temp = [unixtime, total_votes, upvotes, downvotes]
+
+    posts.insert(index, temp)
+
+    return posts
+  end
+
+  def transfer_repost_data_to_array(reposts_hash)
+    count = 1
+    reposts = []
+
+    while true
+      repost_data = reposts_hash[count]
+      if repost_data == -1
+        break
+      end
+      repost_data.unshift(count)
+      count = count + 1
+
+      reposts.push(repost_data)
+    end
+
+    return reposts
+  end
+
+  def consolidate_historical_and_realtime_votes(h_posts, rt_posts, image_ids)
+
+    image_ids.each do |image_id|
+      count = 0
+      rt_data = rt_posts[image_id]
+
+      while count < rt_data.size
+        hist_data = h_posts[count+1]
+
+        if hist_data == -1
+          h_posts[count+1] = [rt_data[count][1], rt_data[count][2], rt_data[count][3]]
+        else
+          hist_data[0] = hist_data[0] + rt_data[count][1]
+          hist_data[1] = hist_data[1] + rt_data[count][2]
+          hist_data[2] = hist_data[2] + rt_data[count][3]
+          h_posts[count+1] = hist_data
+        end
+
+        count = count + 1
+      end 
+    end
+
+    return h_posts
+  end 
+
+  def get_vote_data_for_image_id(image_id)
+    posts = []
+
+    @session.execute("SELECT * FROM votes_by_repost_num_raw WHERE image_id = #{image_id} ALLOW FILTERING").each do |row|
+
+      raw_count = row['count']
+      raw_votes = row['votes']
+      raw_upvotes = row['upvotes']
+      raw_downvotes = row['downvotes']
+      raw_unixtime = row['unixtime']
+
+      posts[raw_count-1] = [raw_unixtime, raw_votes, raw_upvotes, raw_downvotes]
+    end
+
+    return posts
+  end
+
+  def get_posts_by_reposts_num
+    repost_nums = Hash.new(-1)
+
+    @session.execute("SELECT * FROM votes_by_repost_num").each do |row|
+      count = row['count']
+      total_votes = row['votes']
+      upvotes = row['upvotes']
+      downvotes = row['downvotes']
+
+      repost_nums[count] = [total_votes, upvotes, downvotes]
+
+    end    
+
+    @test_h = repost_nums.clone
+    return repost_nums    
+
+  end
+
   def connect_to_cluster
     cluster = Cassandra.cluster
     keyspace = 'reddit_posts'
     @session = cluster.connect(keyspace)
   end
-
-  # private
-  #   # Use callbacks to share common setup or constraints between actions.
-  #   def set_repost
-  #     @repost = Repost.find(params[:id])
-  #   end
-
-  #   # Never trust parameters from the scary internet, only allow the white list through.
-  #   def repost_params
-  #     params[:repost]
-  #   end
 end

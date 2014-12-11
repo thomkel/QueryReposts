@@ -1,6 +1,8 @@
 Rails.application.routes.draw do
 
   root "reposts#index"
+  get '/votes_by_times_reposted' => 'reposts#votes_by_times_reposted'
+  get '/votes_by_repost_num' => 'reposts#votes_by_repost_num'
   resources :reposts
 
   # The priority is based upon order of creation: first created -> highest priority.
