@@ -33,7 +33,7 @@ class RepostsController < ApplicationController
     upvotes = count_info[1] + u_votes
     downvotes = count_info[2] + d_votes
 
-    @data_by_counts[count.to_i] = [votes, upvotes, downvotes]
+    @data_by_counts[count] = [votes, upvotes, downvotes]
     @counts[count] = true
   end
 
@@ -47,10 +47,11 @@ class RepostsController < ApplicationController
       upvotes = row['upvotes']
       downvotes = row['downvotes']
 
+
       # if no realtime post with image id
-      if @posts[image_id.to_s] != -1  
+      if @posts[image_id] != -1  
         @found = "true"
-        post_info = @posts[image_id.to_s]
+        post_info = @posts[image_id]
         total_votes = total_votes + post_info[0]
         upvotes = upvotes + post_info[1]
         downvotes = downvotes + post_info[2]
@@ -63,19 +64,20 @@ class RepostsController < ApplicationController
 
         sum_data_by_count_info(count, total_votes, upvotes, downvotes)
 
-        @posts[image_id.to_s] = -1
+        @posts[image_id] = -1
       else
-        @votes_by_group.push([row['image_id'], row['count'], row['votes'],
-          row['upvotes'], row['downvotes']
+        @not_found.push(image_id)
+
+        @votes_by_group.push([image_id, count, total_votes,
+          upvotes, downvotes
         ])
 
-        @not_found.push(image_id)
         sum_data_by_count_info(count, total_votes, upvotes, downvotes)
       end
 
       # if no historical data
       @image_ids.each do |post|
-        if @posts[post] != -1
+        if (@posts[post] != -1) & !post.nil?
           post_info = @posts[post]
 
           [total_votes, upvotes, downvotes, 1]
@@ -100,21 +102,24 @@ class RepostsController < ApplicationController
       upvotes = row['upvotes']
       downvotes = row['downvotes']
 
-      # put post info in hash table
-      if @posts[image_id.to_s] == -1
-        @posts[image_id.to_s] = [total_votes, upvotes, downvotes, 1]
+      if !image_id.nil?
 
-        @image_ids.push(image_id)  
-      # if already in hash table, sum post info    
-      else
-        post_info = @posts[image_id.to_s]
+        # put post info in hash table
+        if @posts[image_id] == -1
+          @posts[image_id] = [total_votes, upvotes, downvotes, 1]
 
-        total_votes = total_votes + post_info[0]
-        upvotes = upvotes + post_info[1]
-        downvotes = downvotes + post_info[2]
-        count = post_info[3] + 1
+          @image_ids.push(image_id)  
+        # if already in hash table, sum post info    
+        else
+          post_info = @posts[image_id]
 
-        @posts[image_id.to_s] = [total_votes, upvotes, downvotes, count]
+          total_votes = total_votes + post_info[0]
+          upvotes = upvotes + post_info[1]
+          downvotes = downvotes + post_info[2]
+          count = post_info[3] + 1
+
+          @posts[image_id] = [total_votes, upvotes, downvotes, count]
+        end
       end
     end  
 
@@ -219,8 +224,8 @@ class RepostsController < ApplicationController
 
       # if no historical data
       @subreddits.each do |post|
-        if @posts[post.to_s] != -1
-          post_info = @posts[post.to_s]
+        if @posts[post] != -1
+          post_info = @posts[post]
 
           [total_votes, upvotes, downvotes, 1]
 
